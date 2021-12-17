@@ -1,0 +1,927 @@
+---
+title: "Telecom Churn"
+author:  "Xiaoxuan Lu, Cecilia Hu, Yongjun Kim"
+date:  "12/06/2021"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    number_sections: true
+    collapsed:  false
+    theme: journal
+    df_print: kable
+    fig_caption:  true
+    code_folding:  hide
+  pdf_document: default
+---
+
+
+```{r}
+library(readr)
+library(tidyverse)
+library(tibble)
+library(gridExtra)
+```
+# Variable Identification and Initial Transformations
+## Dataset Overview
+```{r}
+churn_data = read.csv('group5.csv')
+summary(churn_data)
+```
+```{r}
+colnames(churn_data)
+```
+# Attributes
+## Numeric Attributes
+```{r}
+colnames(churn_data%>% select_if(is.numeric))
+```
+### Data Quality Issues Observed
+ - 1. The data is clean, no need to filter out outliers and N/A values.
+ - 2. Although the range of some attributions are large, for example, the min of Total day minutes is 0 while the 1st quarter is 143, it is acceptable, since the usage of different person is different.
+
+### Transformations Required
+ - No Transformations is needed.
+ 
+### Attributes For Removal
+ - No Attribute is going to be removed.
+ 
+## Categorical Attributes
+```{r}
+colnames(churn_data%>% select_if(is.character))
+```
+```{r}
+churn_data[1,]
+```
+
+### Data Quality Issues Observed
+ - 1. The types of these attributes are all character, need to be transformed to Factor
+ - 2. "International.plan" and "Voice.mail.plan" have values Yes/No, which need to be changed to TRUE/FALSE in according.
+ - 3. The data is clean, no need to filter out outliers and N/A values.
+ 
+### Transformations Required
+ - 1. Transform the character type to factor type.
+ - 2. Transform Yes/No into  TRUE/FALSE
+ 
+```{r}
+# change the yes/no values to TRUE/FALSE
+churn_data <- churn_data %>% mutate(International.plan = as.factor(case_when(International.plan=='Yes'~'TRUE',International.plan=='No'~'FALSE')),
+                                    Voice.mail.plan = as.factor(case_when(Voice.mail.plan=='Yes'~'TRUE',Voice.mail.plan=='No'~'FALSE')))
+
+# change characters into factors
+churn_data <- churn_data %>% mutate(State=as.factor(State),International.plan=as.factor(International.plan),Voice.mail.plan=as.factor(Voice.mail.plan),Churn=as.factor(Churn))
+```
+```{r}
+# do some check for factors
+table(churn_data$Churn)
+table(churn_data$International.plan)
+table(churn_data$Voice.mail.plan)
+length(unique(churn_data$State))
+```
+```{r}
+colnames(churn_data%>%select_if(is.factor))
+```
+
+### After pre-processing
+- "State": 51 unique values, factor type.
+- "International.plan": Binary values(TRUE/FALSE), factor type
+- "Voice.mail.plan": Binary values(TRUE/FALSE), factor type
+- "Churn": Binary values(TRUE/FALSE), factor type
+
+### Attributes for Removal
+ - No Attribute is going to be removed.
+
+
+
+# Univariate Analysis
+```{r}
+nms = colnames(churn_data %>% select_if(is.numeric))
+fcs = colnames(churn_data %>% select_if(is.factor))
+```
+
+## Numeric Attributes
+```{r}
+nms
+```
+
+```{r}
+summarize_numeric<- function(dataset){
+  dataset = select_if(dataset,is.numeric)
+  summary.table <-data.frame(attributes = names(dataset))
+  summary.table = summary.table %>% mutate('Missing Values' = apply(dataset,2,function (x) sum(is.na(x))),'Unique Values' = apply(dataset,2,function (x) length(unique(x))),'Mean'=colMeans(dataset,na.rm=TRUE),'Min'=apply(dataset,2,function (x) min(x,na.rm=TRUE)), 'Max'=apply(dataset,2,function (x) max(x,na.rm=TRUE)),'SD'=apply(dataset,2,function (x) sd(x,na.rm=TRUE)))
+  summary.table
+}
+nm_sum <- summarize_numeric(churn_data)
+nm_sum
+```
+
+### Group these into 4 groups:
+Account infomation: Account.length, Area.code
+Message: Number.email.messages
+Minutes:Total.day.minutes;Total.eve.minutes;Total.night.minutes;Total.intl.minutes
+Call: Total.day.calls;Total.eve.calls;Total.night.calls;Total.intl.calls
+Charges:Total.day.charge;Total.eve.charge;Total.night.charge;Total.intl.charge
+Service: Customer.service.calls
+
+#### Account infomation
+```{r}
+grid.arrange(ggplot(churn_data) + geom_histogram(aes(x=Account.length),bins=30),
+             ggplot(churn_data) + geom_histogram(aes(x=Area.code),bins=5),
+             ncol=2,top='Account infomation')
+```
+
+#### Message
+```{r}
+ggplot(churn_data) + geom_histogram(aes(x=Number.email.messages),bins=10)+ ggtitle("Message")
+```
+
+#### Minutes
+```{r}
+grid.arrange(ggplot(churn_data) + geom_histogram(aes(x=Total.day.minutes),bins=30),
+             ggplot(churn_data) + geom_histogram(aes(x=Total.eve.minutes),bins=30),
+             ggplot(churn_data) + geom_histogram(aes(x=Total.night.minutes),bins=30),
+             ggplot(churn_data) + geom_histogram(aes(x=Total.intl.minutes),bins=30),
+             top='Minutes',ncol=2)
+```
+
+#### Calls
+```{r}
+grid.arrange(ggplot(churn_data) + geom_histogram(aes(x=Total.day.calls),bins=30),
+             ggplot(churn_data) + geom_histogram(aes(x=Total.eve.calls),bins=30),
+             ggplot(churn_data) + geom_histogram(aes(x=Total.night.calls),bins=30),
+             ggplot(churn_data) + geom_histogram(aes(x=Total.intl.calls),bins=20),
+             top='Calls',ncol=2)
+```
+
+#### Charge
+```{r}
+grid.arrange(ggplot(churn_data) + geom_histogram(aes(x=Total.day.charge),bins=30),
+             ggplot(churn_data) + geom_histogram(aes(x=Total.eve.charge),bins=30),
+             ggplot(churn_data) + geom_histogram(aes(x=Total.night.charge),bins=30),
+             ggplot(churn_data) + geom_histogram(aes(x=Total.intl.charge),bins=30),
+             top='Charge',ncol=2)
+```
+
+#### Service
+```{r}
+ggplot(churn_data) + geom_histogram(aes(x=Customer.service.calls),bins=10)+ ggtitle("Service")
+```
+
+## Character Attributes
+```{r}
+fcs
+```
+
+```{r}
+churn_data %>% select(fcs) %>% summary()
+```
+### Group them into 2 groups
+1. Usage info: State; International.plan; Voice.mail.plan
+2. Churn info: Churn
+
+## Usage info
+```{r}
+summarize_factor<- function(dataset){
+  dataset = select_if(dataset,is.factor)
+  summary.table <-data.frame(attributes = names(dataset))
+  summary.table = summary.table %>% mutate('Missing Values' = apply(dataset,2,function (x) sum(is.na(x))),'Unique Values' = apply(dataset,2,function (x) length(unique(x))))
+  summary.table
+}
+fc_sum <- summarize_factor(churn_data)
+
+```
+
+```{r}
+grid.arrange(ggplot(churn_data) + geom_bar(aes(x=State))+theme(axis.text.x = element_text(angle = 90, size = 5)),
+             ggplot(churn_data) + geom_bar(aes(x=International.plan)),
+             ggplot(churn_data) + geom_bar(aes(x=Voice.mail.plan)),
+             top='Usage info',ncol=3)
+```
+
+#### Churn info
+```{r}
+ggplot(churn_data) + geom_bar(aes(x=Churn))+ ggtitle("Churn info")
+```
+
+
+# Bivariate Analysis
+
+## Measure/Measure
+Account infomation: Account.length, Area.code
+Message: Number.email.messages
+Minutes:Total.day.minutes;Total.eve.minutes;Total.night.minutes;Total.intl.minutes
+Call: Total.day.calls;Total.eve.calls;Total.night.calls;Total.intl.calls
+Charges:Total.day.charge;Total.eve.charge;Total.night.charge;Total.intl.charge
+Service: Customer.service.calls
+
+```{r}
+grid.arrange(ggplot(churn_data) + geom_point(aes(x=Account.length, y = Area.code)),
+             ggplot(churn_data)+ geom_point(aes(x=Account.length, y = Number.email.messages)),
+             ggplot(churn_data)+ geom_point(aes(x=Account.length, y = Customer.service.calls)),
+             ggplot(churn_data)+ geom_point(aes(x=Account.length, y = Total.day.minutes)),
+             ggplot(churn_data)+ geom_point(aes(x=Account.length, y = Total.eve.minutes)),
+             ggplot(churn_data)+ geom_point(aes(x=Account.length, y = Total.night.minutes)),
+             ggplot(churn_data)+ geom_point(aes(x=Account.length, y = Total.intl.minutes)),
+             ggplot(churn_data)+ geom_point(aes(x=Account.length, y = Total.day.calls)),
+             ggplot(churn_data)+ geom_point(aes(x=Account.length, y = Total.eve.calls)),
+             ggplot(churn_data)+ geom_point(aes(x=Account.length, y = Total.night.calls)),
+             ggplot(churn_data)+ geom_point(aes(x=Account.length, y = Total.intl.calls)),
+             ggplot(churn_data)+ geom_point(aes(x=Account.length, y = Total.day.charge)),
+             ggplot(churn_data)+ geom_point(aes(x=Account.length, y = Total.eve.charge)),
+             ggplot(churn_data)+ geom_point(aes(x=Account.length, y = Total.night.charge)),
+             ggplot(churn_data)+ geom_point(aes(x=Account.length, y = Total.intl.charge)),
+             top='Account.length',nrow=3,
+             heights = c(2, 4, 2))
+```
+```{r}
+grid.arrange(ggplot(churn_data) + geom_point(aes(x=Area.code, y = Account.length)),
+             ggplot(churn_data)+ geom_point(aes(x=Area.code, y = Number.email.messages)),
+             ggplot(churn_data)+ geom_point(aes(x=Area.code, y = Customer.service.calls)),
+             ggplot(churn_data)+ geom_point(aes(x=Area.code, y = Total.day.minutes)),
+             ggplot(churn_data)+ geom_point(aes(x=Area.code, y = Total.eve.minutes)),
+             ggplot(churn_data)+ geom_point(aes(x=Area.code, y = Total.night.minutes)),
+             ggplot(churn_data)+ geom_point(aes(x=Area.code, y = Total.intl.minutes)),
+             ggplot(churn_data)+ geom_point(aes(x=Area.code, y = Total.day.calls)),
+             ggplot(churn_data)+ geom_point(aes(x=Area.code, y = Total.eve.calls)),
+             ggplot(churn_data)+ geom_point(aes(x=Area.code, y = Total.night.calls)),
+             ggplot(churn_data)+ geom_point(aes(x=Area.code, y = Total.intl.calls)),
+             ggplot(churn_data)+ geom_point(aes(x=Area.code, y = Total.day.charge)),
+             ggplot(churn_data)+ geom_point(aes(x=Area.code, y = Total.eve.charge)),
+             ggplot(churn_data)+ geom_point(aes(x=Area.code, y = Total.night.charge)),
+             ggplot(churn_data)+ geom_point(aes(x=Area.code, y = Total.intl.charge)),
+             top='Area.code',nrow=3,
+             heights = c(2, 2, 2))
+```
+```{r}
+grid.arrange(ggplot(churn_data)+ geom_point(aes(x=Number.email.messages, y = Customer.service.calls)),
+             ggplot(churn_data)+ geom_point(aes(x=Number.email.messages, y = Total.day.minutes)),
+             ggplot(churn_data)+ geom_point(aes(x=Number.email.messages, y = Total.eve.minutes)),
+             ggplot(churn_data)+ geom_point(aes(x=Number.email.messages, y = Total.night.minutes)),
+             ggplot(churn_data)+ geom_point(aes(x=Number.email.messages, y = Total.intl.minutes)),
+             ggplot(churn_data)+ geom_point(aes(x=Number.email.messages, y = Total.day.calls)),
+             ggplot(churn_data)+ geom_point(aes(x=Number.email.messages, y = Total.eve.calls)),
+             ggplot(churn_data)+ geom_point(aes(x=Number.email.messages, y = Total.night.calls)),
+             ggplot(churn_data)+ geom_point(aes(x=Number.email.messages, y = Total.intl.calls)),
+             ggplot(churn_data)+ geom_point(aes(x=Number.email.messages, y = Total.day.charge)),
+             ggplot(churn_data)+ geom_point(aes(x=Number.email.messages, y = Total.eve.charge)),
+             ggplot(churn_data)+ geom_point(aes(x=Number.email.messages, y = Total.night.charge)),
+             ggplot(churn_data)+ geom_point(aes(x=Number.email.messages, y = Total.intl.charge)),
+             top='Number.email.messages',nrow=3,
+             heights = c(2, 2, 2))
+```
+
+```{r}
+grid.arrange(ggplot(churn_data)+ geom_point(aes(x=Customer.service.calls, y = Total.day.minutes)),
+             ggplot(churn_data)+ geom_point(aes(x=Customer.service.calls, y = Total.eve.minutes)),
+             ggplot(churn_data)+ geom_point(aes(x=Customer.service.calls, y = Total.night.minutes)),
+             ggplot(churn_data)+ geom_point(aes(x=Customer.service.calls, y = Total.intl.minutes)),
+             ggplot(churn_data)+ geom_point(aes(x=Customer.service.calls, y = Total.day.calls)),
+             ggplot(churn_data)+ geom_point(aes(x=Customer.service.calls, y = Total.eve.calls)),
+             ggplot(churn_data)+ geom_point(aes(x=Customer.service.calls, y = Total.night.calls)),
+             ggplot(churn_data)+ geom_point(aes(x=Customer.service.calls, y = Total.intl.calls)),
+             ggplot(churn_data)+ geom_point(aes(x=Customer.service.calls, y = Total.day.charge)),
+             ggplot(churn_data)+ geom_point(aes(x=Customer.service.calls, y = Total.eve.charge)),
+             ggplot(churn_data)+ geom_point(aes(x=Customer.service.calls, y = Total.night.charge)),
+             ggplot(churn_data)+ geom_point(aes(x=Customer.service.calls, y = Total.intl.charge)),
+             top='Customer.service.calls',nrow=3,
+             heights = c(2, 2, 2))
+```
+
+```{r}
+grid.arrange(ggplot(churn_data)+ geom_point(aes(x=Total.day.minutes, y = Total.eve.minutes)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.day.minutes, y = Total.night.minutes)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.day.minutes, y = Total.intl.minutes)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.day.minutes, y = Total.day.calls)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.day.minutes, y = Total.eve.calls)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.day.minutes, y = Total.night.calls)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.day.minutes, y = Total.intl.calls)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.day.minutes, y = Total.day.charge)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.day.minutes, y = Total.eve.charge)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.day.minutes, y = Total.night.charge)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.day.minutes, y = Total.intl.charge)),
+             top='Total.day.minutes',nrow=3,
+             heights = c(2, 2, 2))
+```
+```{r}
+grid.arrange(ggplot(churn_data)+ geom_point(aes(x=Total.eve.minutes, y = Total.day.minutes)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.eve.minutes, y = Total.night.minutes)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.eve.minutes, y = Total.intl.minutes)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.eve.minutes, y = Total.day.calls)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.eve.minutes, y = Total.eve.calls)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.eve.minutes, y = Total.night.calls)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.eve.minutes, y = Total.intl.calls)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.eve.minutes, y = Total.day.charge)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.eve.minutes, y = Total.eve.charge)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.eve.minutes, y = Total.night.charge)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.eve.minutes, y = Total.intl.charge)),
+             top='Total.eve.minutes',nrow=3,
+             heights = c(2, 2, 2))
+```
+```{r}
+grid.arrange(ggplot(churn_data)+ geom_point(aes(x=Total.night.minutes, y = Total.eve.minutes)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.night.minutes, y = Total.day.minutes)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.night.minutes, y = Total.intl.minutes)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.night.minutes, y = Total.day.calls)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.night.minutes, y = Total.eve.calls)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.night.minutes, y = Total.night.calls)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.night.minutes, y = Total.intl.calls)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.night.minutes, y = Total.day.charge)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.night.minutes, y = Total.eve.charge)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.night.minutes, y = Total.night.charge)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.night.minutes, y = Total.intl.charge)),
+             top='Total.night.minutes',nrow=3,
+             heights = c(2, 2, 2))
+```
+```{r}
+grid.arrange(ggplot(churn_data)+ geom_point(aes(x=Total.intl.minutes, y = Total.eve.minutes)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.intl.minutes, y = Total.night.minutes)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.intl.minutes, y = Total.day.minutes)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.intl.minutes, y = Total.day.calls)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.intl.minutes, y = Total.eve.calls)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.intl.minutes, y = Total.night.calls)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.intl.minutes, y = Total.intl.calls)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.intl.minutes, y = Total.day.charge)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.intl.minutes, y = Total.eve.charge)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.intl.minutes, y = Total.night.charge)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.intl.minutes, y = Total.intl.charge)),
+             top='Total.intl.minutes',nrow=3,
+             heights = c(2, 2, 2))
+```
+```{r}
+grid.arrange(ggplot(churn_data)+ geom_point(aes(x=Total.day.calls, y = Total.eve.calls)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.day.calls, y = Total.night.calls)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.day.calls, y = Total.intl.calls)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.day.calls, y = Total.day.charge)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.day.calls, y = Total.eve.charge)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.day.calls, y = Total.night.charge)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.day.calls, y = Total.intl.charge)),
+             top='Total.day.calls',nrow=3,
+             heights = c(2, 2, 2))
+```
+```{r}
+grid.arrange(ggplot(churn_data)+ geom_point(aes(x=Total.eve.calls, y = Total.day.calls)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.eve.calls, y = Total.night.calls)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.eve.calls, y = Total.intl.calls)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.eve.calls, y = Total.day.charge)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.eve.calls, y = Total.eve.charge)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.eve.calls, y = Total.night.charge)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.eve.calls, y = Total.intl.charge)),
+             top='Total.eve.calls',nrow=3,
+             heights = c(2, 2, 2))
+```
+```{r}
+grid.arrange(ggplot(churn_data)+ geom_point(aes(x=Total.night.calls, y = Total.eve.calls)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.night.calls, y = Total.day.calls)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.night.calls, y = Total.intl.calls)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.night.calls, y = Total.day.charge)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.night.calls, y = Total.eve.charge)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.night.calls, y = Total.night.charge)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.night.calls, y = Total.intl.charge)),
+             top='Total.night.calls',nrow=3,
+             heights = c(2, 2, 2))
+```
+```{r}
+grid.arrange(ggplot(churn_data)+ geom_point(aes(x=Total.intl.calls, y = Total.eve.calls)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.intl.calls, y = Total.night.calls)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.intl.calls, y = Total.day.calls)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.intl.calls, y = Total.day.charge)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.intl.calls, y = Total.eve.charge)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.intl.calls, y = Total.night.charge)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.day.calls, y = Total.intl.charge)),
+             top='Total.intl.calls',nrow=3,
+             heights = c(2, 2, 2))
+```
+```{r}
+grid.arrange(ggplot(churn_data)+ geom_point(aes(x=Total.day.charge, y = Total.eve.charge)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.day.charge, y = Total.night.charge)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.day.charge, y = Total.intl.charge)),
+             top='Total.charge',nrow=3,
+             heights = c(2, 2, 2))
+```
+
+## Base on above plots, the meaningful plots are the relationship between charge and minutes
+```{r}
+grid.arrange(ggplot(churn_data)+ geom_point(aes(x=Total.day.minutes, y = Total.day.charge)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.eve.minutes, y = Total.eve.charge)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.night.minutes, y = Total.night.charge)),
+             ggplot(churn_data)+ geom_point(aes(x=Total.intl.minutes, y = Total.intl.charge)),
+             top='minutes vs charges',nrow=2,
+             heights = c(2, 2))
+```
+
+```{r}
+library(ggcorrplot)
+cor1 = cor(churn_data %>%select_if(is.numeric))
+ggcorrplot(cor1)
+round(cor1,2)
+```
+
+## Category/Category
+```{r}
+fcs
+```
+ 
+```{r}
+grid.arrange(ggplot(churn_data) + geom_bar(aes(fill= International.plan, x = State),position="fill")+theme(axis.text.x = element_text(angle = 90, size = 8)),
+             ggplot(churn_data) + geom_bar(aes(fill = Voice.mail.plan, x = State),position="fill")+theme(axis.text.x = element_text(angle = 90, size = 8)),
+             ggplot(churn_data) + geom_bar(aes(fill = Churn, x = State),position="fill")+theme(axis.text.x = element_text(angle = 90, size = 8)),
+             top='State related')
+```
+```{r}
+grid.arrange(ggplot(churn_data) + geom_bar(aes(fill= State, x = International.plan),position="fill"),
+             ggplot(churn_data) + geom_bar(aes(fill = Voice.mail.plan, x = International.plan),position="fill"),
+             ggplot(churn_data) + geom_bar(aes(fill = Churn, x = International.plan),position="fill"),
+             top='International.plan related')
+```
+```{r}
+chisq.test(table(churn_data$International.plan,churn_data$Churn))
+chisq.test(table(churn_data$International.plan,churn_data$Voice.mail.plan))
+```
+
+```{r}
+grid.arrange(ggplot(churn_data) + geom_bar(aes(fill= State, x = Voice.mail.plan),position="fill"),
+             ggplot(churn_data) + geom_bar(aes(fill = International.plan, x = Voice.mail.plan),position="fill"),
+             ggplot(churn_data) + geom_bar(aes(fill = Churn, x = Voice.mail.plan),position="fill"),
+             top='Voice.mail.plan related')
+```
+```{r}
+chisq.test(table(churn_data$Voice.mail.plan,churn_data$Churn))
+chisq.test(table(churn_data$Voice.mail.plan,churn_data$International.plan))
+```
+
+```{r}
+grid.arrange(ggplot(churn_data) + geom_bar(aes(fill= State, x = Churn),position="fill"),
+             ggplot(churn_data) + geom_bar(aes(fill = International.plan, x = Churn),position="fill"),
+             ggplot(churn_data) + geom_bar(aes(fill = Voice.mail.plan, x = Churn),position="fill"),
+             top='Churn related')
+```
+
+
+```{r}
+chisq.test(table(churn_data$Churn,churn_data$International.plan))
+chisq.test(table(churn_data$Churn,churn_data$Voice.mail.plan))
+chisq.test(table(churn_data$Churn,churn_data$State))
+```
+
+## Category/Measure
+```{r}
+nms
+```
+
+```{r}
+size_a = 10
+grid.arrange(ggplot(churn_data,aes(x =Churn,y=Account.length)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+             ggplot(churn_data,aes(x =Churn,y=Area.code)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+             ggplot(churn_data,aes(x =Churn,y=Number.email.messages)) + geom_boxplot()+theme(axis.title.y=element_text(size=8)),
+             ggplot(churn_data,aes(x =Churn,y=Total.day.minutes)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+             ggplot(churn_data,aes(x =Churn,y=Total.day.calls)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+             ggplot(churn_data,aes(x =Churn,y=Total.day.charge)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+             ggplot(churn_data,aes(x =Churn,y=Total.eve.minutes)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+             ggplot(churn_data,aes(x =Churn,y=Total.eve.calls)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+             ggplot(churn_data,aes(x =Churn,y=Total.eve.charge)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+             ggplot(churn_data,aes(x =Churn,y=Total.night.minutes)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+             ggplot(churn_data,aes(x =Churn,y=Total.night.calls)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+             ggplot(churn_data,aes(x =Churn,y=Total.night.charge)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+             ggplot(churn_data,aes(x =Churn,y=Total.intl.minutes)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+             ggplot(churn_data,aes(x =Churn,y=Total.intl.calls)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+             ggplot(churn_data,aes(x =Churn,y=Total.intl.charge)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+             ggplot(churn_data,aes(x =Churn,y=Customer.service.calls)) + geom_boxplot()+theme(axis.title.y=element_text(size=8)),
+             left='Churn related')
+
+```
+
+
+```{r}
+grid.arrange(ggplot(churn_data,aes(x =International.plan,y=Account.length)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+             ggplot(churn_data,aes(x =International.plan,y=Area.code)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+             ggplot(churn_data,aes(x =International.plan,y=Number.email.messages)) + geom_boxplot()+theme(axis.title.y=element_text(size=8)),
+              ggplot(churn_data,aes(x =International.plan,y=Customer.service.calls)) + geom_boxplot()+theme(axis.title.y=element_text(size=8)),
+             ggplot(churn_data,aes(x =International.plan,y=Total.day.minutes)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+             ggplot(churn_data,aes(x =International.plan,y=Total.day.calls)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+             ggplot(churn_data,aes(x =International.plan,y=Total.day.charge)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+             ggplot(churn_data,aes(x =International.plan,y=Total.eve.minutes)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+             ggplot(churn_data,aes(x =International.plan,y=Total.eve.calls)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+             ggplot(churn_data,aes(x =International.plan,y=Total.eve.charge)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+             ggplot(churn_data,aes(x =International.plan,y=Total.night.minutes)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+             ggplot(churn_data,aes(x =International.plan,y=Total.night.calls)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+             ggplot(churn_data,aes(x =International.plan,y=Total.night.charge)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+             ggplot(churn_data,aes(x =International.plan,y=Total.intl.minutes)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+             ggplot(churn_data,aes(x =International.plan,y=Total.intl.calls)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+             ggplot(churn_data,aes(x =International.plan,y=Total.intl.charge)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+            
+             left='Churn related')
+
+```
+```{r}
+grid.arrange(ggplot(churn_data,aes(x =Voice.mail.plan,y=Account.length)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+             ggplot(churn_data,aes(x =Voice.mail.plan,y=Area.code)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+             ggplot(churn_data,aes(x =Voice.mail.plan,y=Number.email.messages)) + geom_boxplot()+theme(axis.title.y=element_text(size=8)),ggplot(churn_data,aes(x =Voice.mail.plan,y=Customer.service.calls)) + geom_boxplot()+theme(axis.title.y=element_text(size=8)),
+             ggplot(churn_data,aes(x =Voice.mail.plan,y=Total.day.minutes)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+             ggplot(churn_data,aes(x =Voice.mail.plan,y=Total.day.calls)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+             ggplot(churn_data,aes(x =Voice.mail.plan,y=Total.day.charge)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+             ggplot(churn_data,aes(x =Voice.mail.plan,y=Total.eve.minutes)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+             ggplot(churn_data,aes(x =Voice.mail.plan,y=Total.eve.calls)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+             ggplot(churn_data,aes(x =Voice.mail.plan,y=Total.eve.charge)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+             ggplot(churn_data,aes(x =Voice.mail.plan,y=Total.night.minutes)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+             ggplot(churn_data,aes(x =Voice.mail.plan,y=Total.night.calls)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+             ggplot(churn_data,aes(x =Voice.mail.plan,y=Total.night.charge)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+             ggplot(churn_data,aes(x =Voice.mail.plan,y=Total.intl.minutes)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+             ggplot(churn_data,aes(x =Voice.mail.plan,y=Total.intl.calls)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+             ggplot(churn_data,aes(x =Voice.mail.plan,y=Total.intl.charge)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+             left='Churn related')
+
+```
+```{r}
+grid.arrange(
+             ggplot(churn_data,aes(x =State,y=Total.day.minutes)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+             ggplot(churn_data,aes(x =State,y=Total.day.calls)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+             ggplot(churn_data,aes(x =State,y=Total.day.charge)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+             ggplot(churn_data,aes(x =State,y=Total.eve.minutes)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+             ggplot(churn_data,aes(x =State,y=Total.eve.calls)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+             ggplot(churn_data,aes(x =State,y=Total.eve.charge)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+             ggplot(churn_data,aes(x =State,y=Total.night.minutes)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+             ggplot(churn_data,aes(x =State,y=Total.night.calls)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+             ggplot(churn_data,aes(x =State,y=Total.night.charge)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+             ggplot(churn_data,aes(x =State,y=Total.intl.minutes)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+             ggplot(churn_data,aes(x =State,y=Total.intl.calls)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+             ggplot(churn_data,aes(x =State,y=Total.intl.charge)) + geom_boxplot()+theme(axis.title=element_text(size=size_a)),
+             
+             left='Churn related')
+
+```
+
+
+```{r}
+names <- colnames(churn_data)
+nm_index = c(2,3,6:19)
+fc_index = c(1,4,5,20)
+# for (j in fc_index) {
+#   for (i in nm_index) {
+#     t <- churn_data%>%group_by(churn_data[[j]])%>%summarise(Mean=mean(churn_data[[i]]),Median=median(churn_data[[i]]),SD=sd(churn_data[[i]]))
+#     print(colnames(churn_data[j]))
+#     print(colnames(churn_data[i]))
+#     print(t)
+#   }
+# }
+
+```
+
+```{r}
+churn_data%>%group_by(Churn)%>%summarise(Mean=mean(Number.email.messages),Median=median(Number.email.messages),SD=sd(Number.email.messages))
+churn_data%>%group_by(Churn)%>%summarise(Mean=mean(Customer.service.calls),Median=median(Customer.service.calls),SD=sd(Customer.service.calls))
+churn_data%>%group_by(Churn)%>%summarise(Mean=mean(Total.day.minutes),Median=median(Total.day.minutes),SD=sd(Total.day.minutes))
+churn_data%>%group_by(Churn)%>%summarise(Mean=mean(Total.day.calls),Median=median(Total.day.calls),SD=sd(Total.day.calls))
+churn_data%>%group_by(Churn)%>%summarise(Mean=mean(Total.day.charge),Median=median(Total.day.charge),SD=sd(Total.day.charge))
+churn_data%>%group_by(Churn)%>%summarise(Mean=mean(Total.eve.minutes),Median=median(Total.intl.calls),SD=sd(Total.eve.minutes))
+churn_data%>%group_by(Churn)%>%summarise(Mean=mean(Total.eve.calls),Median=median(Total.eve.calls),SD=sd(Total.eve.calls))
+churn_data%>%group_by(Churn)%>%summarise(Mean=mean(Total.eve.charge),Median=median(Total.eve.charge),SD=sd(Total.eve.charge))
+churn_data%>%group_by(Churn)%>%summarise(Mean=mean(Total.night.minutes),Median=median(Total.night.minutes),SD=sd(Total.night.minutes))
+churn_data%>%group_by(Churn)%>%summarise(Mean=mean(Total.night.calls),Median=median(Total.intl.calls),SD=sd(Total.night.calls))
+churn_data%>%group_by(Churn)%>%summarise(Mean=mean(Total.night.charge),Median=median(Total.night.charge),SD=sd(Total.night.charge))
+churn_data%>%group_by(Churn)%>%summarise(Mean=mean(Total.intl.minutes),Median=median(Total.intl.minutes),SD=sd(Total.intl.minutes))
+churn_data%>%group_by(Churn)%>%summarise(Mean=mean(Total.intl.calls),Median=median(Total.intl.calls),SD=sd(Total.intl.calls))
+churn_data%>%group_by(Churn)%>%summarise(Mean=mean(Total.intl.charge),Median=median(Total.intl.charge),SD=sd(Total.intl.charge))
+```
+
+
+* More about churn
+```{r}
+grid.arrange(ggplot(churn_data, aes(x = Churn, y =Total.intl.calls, fill = International.plan)) + geom_bar(stat='identity'),
+             ggplot(churn_data, aes(x = Churn, y =Total.intl.charge, fill = Voice.mail.plan)) + geom_bar(stat='identity'))
+```
+```{r}
+for (i in nm_index) {
+  tt <- t.test(churn_data[[i]]~churn_data$Churn,alternate="greater")
+  cat(colnames(churn_data[i])," t-test with Churn, p value is ",tt$p.value," which p<0.05? ", (tt$p.value<0.05),"\n")
+}
+
+```
+
+# Final Analytic-Ready Table Description
+
+# Model
+* overview the data for "yes" and "no" of churning.
+* show PCA graph
+* Using clustering
+* PCA & clustering : scale? yes, since minutes and charges are larger than the cases like 'international call'.
+
+```{r}
+table(churn_data$Churn,churn_data$International.plan)
+table(churn_data$Churn,churn_data$Voice.mail.plan)
+```
+
+
+
+```{r}
+churn_summary <- churn_data %>% group_by(Churn) %>% summarize(Size = n(),total_calls=mean(Total.day.calls+Total.eve.calls+Total.eve.calls),total_minutes=mean(Total.day.minutes+Total.eve.minutes+Total.eve.minutes),total_charge=mean(Total.day.charge+Total.eve.charge+Total.eve.charge),intl_call=mean(Total.intl.calls),intl_minutes=mean(Total.intl.minutes),intl_charge=mean(Total.intl.charge),customer_servescall = mean(Customer.service.calls))
+```
+
+* PCA
+```{r}
+churn_scaled_data <- scale(churn_summary[,-which(names(churn_summary) %in% c("Size","Churn"))])
+```
+```{r}
+library(devtools)
+library(ggplot2)
+```
+
+```{r}
+churn_data1 <- churn_data[,4:20]
+ind <- sapply(churn_data1, is.numeric)
+churn_data1[ind] <- lapply(churn_data1[ind], scale)
+```
+
+```{r}
+library(corrplot)
+churn_cor <- cor(churn_data1[,-which(names(churn_data1) %in% c("Churn","International.plan","Voice.mail.plan"))])
+corrplot(churn_cor)
+```
+
+```{r}
+churn_data2 <- churn_data1[,-which(names(churn_data1) %in% c("Churn","International.plan","Voice.mail.plan","Total.day.minutes","Total.eve.minutes","Total.night.minutes","Total.intl.minutes"))]
+```
+
+```{r}
+# find hopkins value first
+# install.packages("clustertend")
+library(clustertend)
+hopkins(churn_data2,10)
+```
+
+*h is less than 0.5, it indicates a high "clusterability"*
+```{r}
+churn_dist <- churn_data1%>%dist()
+churn_complete = hclust(churn_dist,method = "complete")
+plot(churn_complete, main="Complete Linkage", xlab="", sub="", cex=0.1)
+```
+
+```{r}
+cluster_tree<-cutree(churn_complete, k=2)
+table(cluster_tree,churn_data1$Churn)
+```
+
+# classification
+
+```{r}
+library(rpart)
+library(rpart.plot)
+full_tree = rpart(Churn~Voice.mail.plan+International.plan+Total.night.charge+Total.night.calls+Total.eve.charge+Total.eve.calls+Total.day.charge+Total.day.calls+ Number.email.messages+Total.intl.charge+Total.intl.calls+Customer.service.calls, data = churn_data1, method = "class")
+rpart.plot(full_tree, tweak = 1.2, type = 5)
+```
+```{r}
+full_tree$variable.importance
+```
+
+We will use feature impoartance as the feature selection process. We will drop Total.night.calls ,Total.night.calls ,Total.eve.calls,Total.day.calls and build machine learning models for classification
+```{r}
+
+churn_model=churn_data1[, c('Total.day.charge', 'Customer.service.calls', 'Total.eve.charge','Total.intl.charge','International.plan','Total.intl.calls','Number.email.messages','Voice.mail.plan','Churn')]
+churn_model=churn_model %>% drop_na()
+```
+Encode categorical variables for modeling
+```{r}
+churn_model = churn_model %>% mutate(International.plan = as_factor(case_when(
+    International.plan == FALSE ~ 0,
+    International.plan == TRUE ~ 1)))
+churn_model = churn_model %>% mutate(Voice.mail.plan = as_factor(case_when(
+    Voice.mail.plan == FALSE ~ 0,
+    Voice.mail.plan == TRUE ~ 1)))
+churn_model = churn_model %>% mutate(Churn = as_factor(case_when(
+    Churn == FALSE ~ 0,
+    Churn == TRUE ~ 1)))
+
+```
+Split test and train data
+```{r}
+library(caret)
+# Create index to split based on labels  
+index <- createDataPartition(churn_model$Churn, p=0.75, list=FALSE)
+
+# Subset training set with index
+churn_model.training <- churn_model[index,]
+
+# Subset test set with index
+churn_model.test <- churn_model[-index,]
+```
+KNN
+```{r}
+# KNN:Train a model
+model_knn <- train(churn_model.training[, 1:8], churn_model.training[, 9], method='knn')
+# Predict the labels of the test set
+predictions<-predict(object=model_knn,churn_model.test[,1:8])
+
+# Evaluate the predictions
+table(predictions)
+
+# Confusion matrix 
+confusionMatrix(predictions,churn_model.test[,9])
+```
+
+Logistic Regression
+```{r}
+x=churn_model.training[, 1:8]
+y=churn_model.training[, 9]
+
+```
+
+
+
+```{r}
+# Train a model
+model_lg <- train(data.matrix(x), y, method='glmnet', family='binomial')
+# Predict the labels of the test set
+predictions<-predict(object=model_lg,data.matrix(churn_model.test[,1:8]))
+
+# Evaluate the predictions
+table(predictions)
+#predictions<-ifelse(predictions> 0.5,1,0)
+# Confusion matrix 
+confusionMatrix(predictions,as.factor(churn_model.test[,9]))
+#levels(predictions)
+#levels(churn_model.test[,9])
+```
+naive_bayes
+```{r}
+# Train a model
+model_nb <- train(x, y, method='nb')
+# Predict the labels of the test set
+predictions<-predict(object=model_nb,churn_model.test[,1:8])
+
+# Evaluate the predictions
+predictions
+
+# Confusion matrix 
+confusionMatrix(predictions,churn_model.test[,9])
+```
+random forest
+```{r}
+# Train a model
+model_rf <- train(churn_model.training[, 1:8], churn_model.training[, 9], method='rf')
+# Predict the labels of the test set
+predictions<-predict(object=model_rf,churn_model.test[,1:8])
+
+# Evaluate the predictions
+predictions
+
+# Confusion matrix 
+confusionMatrix(predictions,churn_model.test[,9])
+```
+variable importance
+```{r}
+varimp_rf <- varImp(model_rf)
+plot(varimp_rf , main="Variable Importance with Random Forest")
+```
+```{r}
+varimp_lg <- varImp(model_lg)
+plot(varimp_lg , main="Variable Importance with Logistic Regression")
+```
+```{r}
+varimp_nb <- varImp(model_nb)
+plot(varimp_nb , main="Variable Importance with Naive Bayes")
+```
+```{r}
+varimp_knn <- varImp(model_knn)
+plot(varimp_knn , main="Variable Importance with KNN")
+```
+
+# Clustering
+
+## Cluster model
+```{r}
+```
+### Categorical variables
+```{r}
+# Address categorical variables
+churn_model %>% count(International.plan)
+churn_model %>% count(Voice.mail.plan)
+```
+
+### Create binary dummy variables for factors
+```{r}
+churn_model_binary = churn_model %>% mutate(International.plan = if_else(International.plan == '0', 0, 1),
+                                            Voice.mail.plan = if_else(Voice.mail.plan == '0', 0, 1))
+
+churn_model_binary$International.plan = scale(churn_model_binary$International.plan)
+churn_model_binary$Voice.mail.plan = scale(churn_model_binary$Voice.mail.plan)
+
+churn_model_binary = churn_model_binary%>% select_if(is.numeric)
+summary(churn_model_binary)
+```
+
+### Assess clustering tendency
+```{r}
+hopkins(churn_model_binary, 10)
+```
+*h is less than 0.5, it indicates a high "clusterability"*
+
+### Assess clustering Quality by an elbow diagram
+```{r}
+totwss = tibble(num_clusters = 1:10, tot_withinss = 0)
+for (i in 1:10){
+  km = kmeans(churn_model_binary, i, nstart = 10)
+  totwss$tot_withinss[i] = km$tot.withinss
+}
+ggplot(totwss, aes(x = num_clusters, y = tot_withinss)) + geom_line() + geom_point()
+```
+*An elbow diagram shows that 4 may be a good number of clusters*
+
+### Build a 4-cluster model
+```{r}
+km4 = kmeans(churn_model_binary, 4, nstart = 10)
+round(data.frame(Size = km4$size, km4$centers),2)
+```
+*The cluster sizes are balanced*
+
+### Clusters with the original dataframe
+```{r}
+churn_data_km = churn_data[, c("Total.day.charge", "Customer.service.calls", "Total.eve.charge", "Total.intl.charge","International.plan", "Total.intl.calls", "Number.email.messages", "Voice.mail.plan", "Churn")]
+churn_data_km$Cluster = as_factor(km4$cluster)
+
+churn_data_km = churn_data_km %>% mutate(International.plan = case_when(International.plan == TRUE ~ 1,
+                                                                        International.plan == FALSE ~ 0),
+                                         Voice.mail.plan = case_when(Voice.mail.plan == TRUE ~ 1,
+                                                                     Voice.mail.plan == FALSE ~ 0),
+                                         Churn = case_when(Churn == TRUE ~ 1, 
+                                                           Churn == FALSE ~ 0))
+
+Mode <- function(x) {
+  ux <- unique(x)
+  ux[which.max(tabulate(match(x, ux)))]
+}
+
+churn_data_km %>% group_by(Cluster) %>% summarize(Size = n(), 
+                                                        Total.day.charge = mean(Total.day.charge), 
+                                                        Customer.service.calls = mean(Customer.service.calls), 
+                                                        Total.eve.charge = mean(Total.eve.charge),
+                                                        Total.intl.charge = mean(Total.intl.charge),
+                                                        Total.intl.calls = mean(Total.intl.calls),
+                                                        Number.email.messages = mean(Number.email.messages),
+                                                        International.plan = Mode(International.plan),
+                                                        Voice.mail.plan = Mode(Voice.mail.plan))
+```
+
+## Clustering analysis
+### Clusters by attributes
+```{r}
+g1 = ggplot(churn_data_km) + geom_boxplot(aes(x= Cluster, y=Total.day.charge)) 
+g2 = ggplot(churn_data_km) + geom_boxplot(aes(x= Cluster, y=Customer.service.calls))
+g3 = ggplot(churn_data_km) + geom_boxplot(aes(x= Cluster, y=Total.eve.charge))
+g4 = ggplot(churn_data_km) + geom_boxplot(aes(x= Cluster, y=Total.intl.charge))
+g5 = ggplot(churn_data_km) + geom_boxplot(aes(x= Cluster, y=International.plan))
+g6 = ggplot(churn_data_km) + geom_boxplot(aes(x= Cluster, y=Total.intl.calls))
+g7 = ggplot(churn_data_km) + geom_boxplot(aes(x= Cluster, y=Number.email.messages))
+g8 = ggplot(churn_data_km) + geom_boxplot(aes(x= Cluster, y=Voice.mail.plan))
+
+library(gridExtra)
+grid.arrange(g1, g2, g3, g4, g5, g6, g7, g8, nrow = 3)
+```
+
+### Churn rate by clusters
+```{r}
+churn_data_km_rate = churn_data_km %>% group_by(Cluster) %>% count(Churn)
+churn_data_km_rate
+```
+
+#### Cluster 1
+```{r}
+churn_data_km_rate$n[2] / (churn_data_km_rate$n[1] + churn_data_km_rate$n[2])
+```
+
+#### Cluster 2
+```{r}
+churn_data_km_rate$n[4] / (churn_data_km_rate$n[3] + churn_data_km_rate$n[4])
+```
+
+#### Cluster 3
+```{r}
+churn_data_km_rate$n[6] / (churn_data_km_rate$n[5] + churn_data_km_rate$n[6])
+```
+
+#### Cluster 4
+```{r}
+churn_data_km_rate$n[8] / (churn_data_km_rate$n[7] + churn_data_km_rate$n[8])
+```
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
